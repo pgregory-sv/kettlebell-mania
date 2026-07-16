@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Q&D Timer">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Quick and the Dead Timer</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0;
+    padding: 24px 16px 48px;
+    background: #f4f3ef;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: #1a1a18;
+    display: flex;
+    justify-content: center;
+  }
+  .wrap { width: 100%; max-width: 420px; }
+  select, input[type="text"], button {
+    font-family: inherit;
+    font-size: 15px;
+    border: 1px solid #d8d6cd;
+    border-radius: 8px;
+    background: #ffffff;
+    color: #1a1a18;
+    padding: 8px 10px;
+    height: 40px;
+  }
+  select, input[type="text"] { width: 100%; }
+  .row { display: flex; gap: 8px; margin-bottom: 12px; }
+  .row select:last-child { width: 120px; flex: none; }
+  .card {
+    border: 1px solid #e5e3da;
+    border-radius: 14px;
+    padding: 28px 20px;
+    text-align: center;
+    margin-bottom: 14px;
+    background: #ffffff;
+    transition: background 0.4s ease;
+  }
+  #phaseLabel { font-size: 13px; color: #6b6a63; margin: 0 0 10px; letter-spacing: 0.02em; }
+  #exLabel { font-size: 28px; font-weight: 600; margin: 0 0 14px; line-height: 1.2; transition: color 0.4s ease; }
+  #clock { font-size: 56px; font-weight: 600; margin: 0; font-variant-numeric: tabular-nums; }
+  #repCue { font-size: 16px; font-weight: 600; color: #185fa5; margin: 10px 0 0; min-height: 22px; }
+  .dots { display: flex; gap: 6px; justify-content: center; align-items: center; margin-bottom: 14px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #d8d6cd; }
+  .btnrow { display: flex; gap: 8px; }
+  .btnrow button { flex: 1; font-weight: 600; }
+  .btnrow button:disabled { opacity: 0.45; }
+  label.field { display: block; font-size: 12px; color: #6b6a63; margin: 0 0 4px 2px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="row">
+    <div style="flex:1;">
+      <label class="field">Protocol</label>
+      <select id="protocol">
+        <option value="54">5:4 protocol (5 reps x4)</option>
+        <option value="102">10:2 protocol (10 reps x2)</option>
+      </select>
+    </div>
+    <div>
+      <label class="field">Series</label>
+      <select id="series">
+        <option value="2">2 series</option>
+        <option value="3">3 series</option>
+        <option value="4">4 series</option>
+        <option value="5" selected>5 series</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="row">
+    <div style="flex:1;">
+      <label class="field">Exercise 1</label>
+      <input id="ex1" type="text" value="Kettlebell snatch">
+    </div>
+    <div style="flex:1;">
+      <label class="field">Exercise 2</label>
+      <input id="ex2" type="text" value="Power pushup">
+    </div>
+  </div>
+
+  <div class="card" id="card">
+    <p id="phaseLabel"></p>
+    <p id="exLabel">Set your options and press start</p>
+    <p id="clock">00:00</p>
+    <p id="repCue"></p>
+  </div>
+
+  <div class="dots" id="seriesDots"></div>
+
+  <div class="btnrow">
+    <button id="startBtn">Start</button>
+    <button id="pauseBtn" disabled>Pause</button>
+    <button id="resetBtn">Reset</button>
+  </div>
+
+</div>
+
+<script>
+let audioCtx = null;
+function ensureCtx(){
+  if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+  if(audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+function tone(freq, dur, vol, type, delay){
+  try{
+    const ctx = ensureCtx();
+    const startAt = ctx.currentTime + (delay||0);
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.frequency.value = freq;
+    o.type = type || 'sine';
+    g.gain.value = vol;
+    o.connect(g); g.connect(ctx.destination);
+    o.start(startAt);
+    g.gain.setValueAtTime(vol, startAt);
+    g.gain.exponentialRampToValueAtTime(0.001, startAt + dur);
+    o.stop(startAt + dur);
+  }catch(e){}
+}
+function warningTick(){
+  tone(1500, 0.06, 0.06, 'sine');
+}
+function exerciseHorn(){
+  tone(392, 0.22, 0.28, 'square', 0);
+  tone(523, 0.28, 0.28, 'square', 0.22);
+}
+function transitionBeep(){
+  tone(500, 0.3, 0.18, 'sine');
+}
+
+const GREEN_BG = '#dcefdd';
+const GREEN_ACCENT = '#1f6b2f';
+const AMBER_BG = '#fbecc7';
+const AMBER_ACCENT = '#8a5a00';
+const NEUTRAL_BG = '#ffffff';
+const NEUTRAL_ACCENT = '#1a1a18';
+
+let phases = [];
+let phaseIdx = 0;
+let phaseStart = 0;
+let phaseElapsedAtPause = 0;
+let running = false;
+let rafId = null;
+let firedMarks = new Set();
+let firedWarnings = new Set();
+
+const protocolEl = document.getElementById('protocol');
+const seriesEl = document.getElementById('series');
+const ex1El = document.getElementById('ex1');
+const ex2El = document.getElementById('ex2');
+const card = document.getElementById('card');
+const phaseLabel = document.getElementById('phaseLabel');
+const exLabel = document.getElementById('exLabel');
+const clockEl = document.getElementById('clock');
+const repCue = document.getElementById('repCue');
+const seriesDots = document.getElementById('seriesDots');
+const startBtn = document.getElementById('startBtn');
+const pauseBtn = document.getElementById('pauseBtn');
+const resetBtn = document.getElementById('resetBtn');
+
+function fmt(s){
+  s = Math.max(0, Math.ceil(s));
+  const m = Math.floor(s/60);
+  const sec = s%60;
+  return String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0');
+}
+
+function buildPhases(){
+  const proto = protocolEl.value;
+  const n = parseInt(seriesEl.value,10);
+  const marks = proto === '54' ? [0,30,60,90] : [0,60];
+  const repsPerMark = proto === '54' ? 5 : 10;
+  const list = [];
+  for(let s=1;s<=n;s++){
+    list.push({type:'exercise', label:'Series '+s+' of '+n, exName:ex1El.value||'Exercise 1', dur:120, marks, reps:repsPerMark});
+    list.push({type:'rest', label:'Series '+s+' of '+n, exName:'Rest, transition', dur:60, marks:[], reps:0});
+    list.push({type:'exercise', label:'Series '+s+' of '+n, exName:ex2El.value||'Exercise 2', dur:120, marks, reps:repsPerMark});
+    if(s < n){
+      list.push({type:'rest', label:'Series '+s+' of '+n, exName:'Rest before next series', dur:60, marks:[], reps:0});
+    }
+  }
+  list.push({type:'done', label:'Complete', exName:'Workout finished', dur:0, marks:[], reps:0});
+  return list;
+}
+
+function renderDots(){
+  const n = parseInt(seriesEl.value,10);
+  seriesDots.innerHTML = '';
+  for(let i=0;i<n;i++){
+    const dot = document.createElement('span');
+    dot.className = 'dot';
+    seriesDots.appendChild(dot);
+  }
+}
+
+function updateDots(){
+  let seriesCompleted = 0;
+  for(let i=0;i<phaseIdx;i++){
+    if(phases[i].type==='exercise' && phases[i].exName===(ex2El.value||'Exercise 2')) seriesCompleted++;
+  }
+  const dots = seriesDots.children;
+  for(let i=0;i<dots.length;i++){
+    dots[i].style.background = i < seriesCompleted ? '#185fa5' : '#d8d6cd';
+  }
+}
+
+function applyPhaseColors(p){
+  if(!p || p.type === 'done'){
+    card.style.background = NEUTRAL_BG;
+    exLabel.style.color = NEUTRAL_ACCENT;
+    return;
+  }
+  if(p.type === 'exercise'){
+    card.style.background = GREEN_BG;
+    exLabel.style.color = GREEN_ACCENT;
+  } else {
+    card.style.background = AMBER_BG;
+    exLabel.style.color = AMBER_ACCENT;
+  }
+}
+
+function setPhaseUI(){
+  const p = phases[phaseIdx];
+  if(!p) return;
+  if(p.type==='done'){
+    phaseLabel.textContent = 'Complete';
+    exLabel.textContent = 'Workout finished — nice work';
+    applyPhaseColors(p);
+    clockEl.textContent = '00:00';
+    repCue.textContent = '';
+    return;
+  }
+  phaseLabel.textContent = p.label + (p.type==='rest' ? ' — rest' : '');
+  exLabel.textContent = p.exName;
+  applyPhaseColors(p);
+  repCue.textContent = '';
+}
+
+function tick(){
+  if(!running) return;
+  const p = phases[phaseIdx];
+  if(!p || p.type==='done'){
+    finishAll();
+    return;
+  }
+  const elapsed = (performance.now() - phaseStart)/1000 + phaseElapsedAtPause;
+  const remaining = p.dur - elapsed;
+  clockEl.textContent = fmt(remaining);
+
+  const nextPhase = phases[phaseIdx+1];
+  if(nextPhase && nextPhase.type === 'exercise' && remaining <= 5.05){
+    const secLeft = Math.ceil(remaining);
+    if(secLeft >= 1 && secLeft <= 5 && !firedWarnings.has(secLeft)){
+      firedWarnings.add(secLeft);
+      warningTick();
+    }
+  }
+
+  p.marks.forEach(m=>{
+    const key = phaseIdx+'-'+m;
+    if(elapsed >= m && !firedMarks.has(key)){
+      firedMarks.add(key);
+      if(m !== 0){
+        tone(880, 0.15, 0.15, 'sine');
+      }
+      repCue.textContent = 'Go: ' + p.reps + ' reps';
+      setTimeout(()=>{ if(phases[phaseIdx]===p) repCue.textContent=''; }, 1500);
+    }
+  });
+
+  if(remaining <= 0){
+    advancePhase();
+    return;
+  }
+  rafId = requestAnimationFrame(tick);
+}
+
+function advancePhase(){
+  phaseIdx++;
+  phaseElapsedAtPause = 0;
+  phaseStart = performance.now();
+  firedMarks = new Set();
+  firedWarnings = new Set();
+  const p = phases[phaseIdx];
+  if(p && p.type === 'exercise'){
+    exerciseHorn();
+  } else if(p && p.type !== 'done'){
+    transitionBeep();
+  }
+  updateDots();
+  setPhaseUI();
+  if(p && p.type==='done'){
+    finishAll();
+    return;
+  }
+  rafId = requestAnimationFrame(tick);
+}
+
+function finishAll(){
+  running = false;
+  phaseLabel.textContent = 'Complete';
+  exLabel.textContent = 'Workout finished — nice work';
+  applyPhaseColors({type:'done'});
+  clockEl.textContent = '00:00';
+  repCue.textContent = '';
+  startBtn.disabled = false;
+  pauseBtn.disabled = true;
+  updateDots();
+}
+
+startBtn.addEventListener('click', ()=>{
+  ensureCtx();
+  if(phases.length===0 || (phases[phaseIdx] && phases[phaseIdx].type==='done')){
+    phases = buildPhases();
+    phaseIdx = 0;
+    renderDots();
+    setPhaseUI();
+    exerciseHorn();
+  }
+  running = true;
+  phaseStart = performance.now();
+  startBtn.disabled = true;
+  pauseBtn.disabled = false;
+  protocolEl.disabled = true;
+  seriesEl.disabled = true;
+  ex1El.disabled = true;
+  ex2El.disabled = true;
+  rafId = requestAnimationFrame(tick);
+});
+
+pauseBtn.addEventListener('click', ()=>{
+  if(!running) return;
+  running = false;
+  phaseElapsedAtPause += (performance.now() - phaseStart)/1000;
+  cancelAnimationFrame(rafId);
+  startBtn.disabled = false;
+  pauseBtn.disabled = true;
+  startBtn.textContent = 'Resume';
+});
+
+resetBtn.addEventListener('click', ()=>{
+  running = false;
+  cancelAnimationFrame(rafId);
+  phases = [];
+  phaseIdx = 0;
+  phaseElapsedAtPause = 0;
+  firedMarks = new Set();
+  firedWarnings = new Set();
+  startBtn.disabled = false;
+  pauseBtn.disabled = true;
+  startBtn.textContent = 'Start';
+  protocolEl.disabled = false;
+  seriesEl.disabled = false;
+  ex1El.disabled = false;
+  ex2El.disabled = false;
+  phaseLabel.textContent = '';
+  exLabel.textContent = 'Set your options and press start';
+  applyPhaseColors(null);
+  clockEl.textContent = '00:00';
+  repCue.textContent = '';
+  seriesDots.innerHTML = '';
+});
+</script>
+</body>
+</html>
