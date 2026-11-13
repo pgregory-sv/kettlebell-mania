@@ -43,7 +43,10 @@
     background: #ffffff;
     transition: background 0.4s ease;
   }
-  #phaseLabel { font-size: 13px; color: #6b6a63; margin: 0 0 10px; letter-spacing: 0.02em; min-height: 16px; }
+  #phaseLabel.plain { font-size: 13px; color: #6b6a63; margin: 0 0 10px; letter-spacing: 0.02em; min-height: 16px; }
+  #phaseLabel.big { font-size: 28px; font-weight: 600; line-height: 1.1; margin: 0 0 12px; }
+  #phaseLabel .n { font-size: 44px; font-weight: 800; }
+  #phaseLabel .s { font-size: 14px; font-weight: 500; color: #6b6a63; }
   #exLabel { font-size: 28px; font-weight: 600; margin: 0 0 14px; line-height: 1.2; transition: color 0.4s ease; }
   #clock { font-size: 56px; font-weight: 600; margin: 0; font-variant-numeric: tabular-nums; }
   #repCue { font-size: 16px; font-weight: 600; color: #185fa5; margin: 10px 0 0; min-height: 22px; }
@@ -120,7 +123,7 @@
   </div>
 
   <div class="card" id="card">
-    <p id="phaseLabel"></p>
+    <p id="phaseLabel" class="plain"></p>
     <p id="exLabel">Set your options and press start</p>
     <p id="clock">00:00</p>
     <p id="repCue"></p>
@@ -321,18 +324,39 @@ function updateDots(){
 }
 
 /* ---------- UI ---------- */
+function renderLabel(text){
+  phaseLabel.textContent = '';
+  const m = /^(.*?)\s*(\d+)\s+of\s+(\d+)(.*)$/.exec(text);
+  if(!m){
+    phaseLabel.className = 'plain';
+    phaseLabel.textContent = text;
+    return;
+  }
+  phaseLabel.className = 'big';
+  const mk = (cls, t)=>{ const el = document.createElement('span'); if(cls) el.className = cls; el.textContent = t; return el; };
+  phaseLabel.appendChild(mk('', m[1] + ' '));
+  phaseLabel.appendChild(mk('n', m[2]));
+  phaseLabel.appendChild(mk('', ' of '));
+  phaseLabel.appendChild(mk('n', m[3]));
+  if(m[4].trim()) phaseLabel.appendChild(mk('s', ' ' + m[4].trim()));
+}
+
 function applyPhaseColors(p){
   if(!p || p.type === 'done'){
     card.style.background = NEUTRAL_BG;
     exLabel.style.color = NEUTRAL_ACCENT;
+    phaseLabel.style.color = '';
     return;
   }
+  const big = phaseLabel.classList.contains('big');
   if(p.type === 'exercise'){
     card.style.background = GREEN_BG;
     exLabel.style.color = GREEN_ACCENT;
+    phaseLabel.style.color = big ? GREEN_ACCENT : '';
   } else {
     card.style.background = AMBER_BG;
     exLabel.style.color = AMBER_ACCENT;
+    phaseLabel.style.color = big ? AMBER_ACCENT : '';
   }
 }
 
@@ -340,14 +364,14 @@ function setPhaseUI(){
   const p = phases[phaseIdx];
   if(!p) return;
   if(p.type==='done'){
-    phaseLabel.textContent = 'Complete';
+    renderLabel('Complete');
     exLabel.textContent = 'Workout finished, nice work';
     applyPhaseColors(p);
     clockEl.textContent = '00:00';
     repCue.textContent = '';
     return;
   }
-  phaseLabel.textContent = p.label + (p.type==='rest' ? ' (rest)' : '');
+  renderLabel(p.label + (p.type==='rest' ? ' (rest)' : ''));
   exLabel.textContent = p.exName;
   applyPhaseColors(p);
   repCue.textContent = '';
@@ -434,7 +458,7 @@ function advancePhase(){
 function finishAll(){
   running = false;
   releaseWake();
-  phaseLabel.textContent = 'Complete';
+  renderLabel('Complete');
   exLabel.textContent = 'Workout finished, nice work';
   applyPhaseColors({type:'done'});
   clockEl.textContent = '00:00';
@@ -493,7 +517,7 @@ resetBtn.addEventListener('click', ()=>{
   pauseBtn.disabled = true;
   startBtn.textContent = 'Start';
   controls.forEach(el => el.disabled = false);
-  phaseLabel.textContent = '';
+  renderLabel('');
   exLabel.textContent = 'Set your options and press start';
   applyPhaseColors(null);
   clockEl.textContent = '00:00';
