@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
-<meta name="apple-mobile-web-app-title" content="Q&D Timer">
+<meta name="apple-mobile-web-app-title" content="KB Timer">
 <meta name="mobile-web-app-capable" content="yes">
-<title>Quick and the Dead Timer</title>
+<title>Kettlebell Timer</title>
 <style>
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body {
@@ -20,6 +20,7 @@
     justify-content: center;
   }
   .wrap { width: 100%; max-width: 420px; }
+  h1 { font-size: 20px; font-weight: 700; margin: 0 0 14px; text-align: center; letter-spacing: 0.01em; }
   select, input[type="text"], button {
     font-family: inherit;
     font-size: 15px;
@@ -32,7 +33,7 @@
   }
   select, input[type="text"] { width: 100%; }
   .row { display: flex; gap: 8px; margin-bottom: 12px; }
-  .row select:last-child { width: 120px; flex: none; }
+  .series-col { width: 120px; flex: none; }
   .card {
     border: 1px solid #e5e3da;
     border-radius: 14px;
@@ -42,49 +43,80 @@
     background: #ffffff;
     transition: background 0.4s ease;
   }
-  #phaseLabel { font-size: 13px; color: #6b6a63; margin: 0 0 10px; letter-spacing: 0.02em; }
+  #phaseLabel { font-size: 13px; color: #6b6a63; margin: 0 0 10px; letter-spacing: 0.02em; min-height: 16px; }
   #exLabel { font-size: 28px; font-weight: 600; margin: 0 0 14px; line-height: 1.2; transition: color 0.4s ease; }
   #clock { font-size: 56px; font-weight: 600; margin: 0; font-variant-numeric: tabular-nums; }
   #repCue { font-size: 16px; font-weight: 600; color: #185fa5; margin: 10px 0 0; min-height: 22px; }
-  .dots { display: flex; gap: 6px; justify-content: center; align-items: center; margin-bottom: 14px; }
+  .dots { display: flex; gap: 6px; justify-content: center; align-items: center; flex-wrap: wrap; margin-bottom: 14px; min-height: 8px; }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: #d8d6cd; }
   .btnrow { display: flex; gap: 8px; }
   .btnrow button { flex: 1; font-weight: 600; }
   .btnrow button:disabled { opacity: 0.45; }
   label.field { display: block; font-size: 12px; color: #6b6a63; margin: 0 0 4px 2px; }
+  .hidden { display: none; }
+  .note { font-size: 12px; color: #6b6a63; margin: -4px 2px 12px; line-height: 1.4; }
 </style>
 </head>
 <body>
 <div class="wrap">
 
+  <h1>Kettlebell Timer</h1>
+
   <div class="row">
     <div style="flex:1;">
-      <label class="field">Protocol</label>
-      <select id="protocol">
-        <option value="54">5:4 protocol (5 reps x4)</option>
-        <option value="102">10:2 protocol (10 reps x2)</option>
-      </select>
-    </div>
-    <div>
-      <label class="field">Series</label>
-      <select id="series">
-        <option value="2">2 series</option>
-        <option value="3">3 series</option>
-        <option value="4">4 series</option>
-        <option value="5" selected>5 series</option>
+      <label class="field">Workout</label>
+      <select id="workout">
+        <option value="qd">Quick and Dead</option>
+        <option value="ss">Simple and Sinister</option>
       </select>
     </div>
   </div>
 
-  <div class="row">
-    <div style="flex:1;">
-      <label class="field">Exercise 1</label>
-      <input id="ex1" type="text" value="Kettlebell snatch">
+  <!-- Quick and Dead options -->
+  <div id="qdOptions">
+    <div class="row">
+      <div style="flex:1;">
+        <label class="field">Protocol</label>
+        <select id="protocol">
+          <option value="54">5:4 protocol (5 reps x4)</option>
+          <option value="102">10:2 protocol (10 reps x2)</option>
+        </select>
+      </div>
+      <div class="series-col">
+        <label class="field">Series</label>
+        <select id="series">
+          <option value="2">2 series</option>
+          <option value="3">3 series</option>
+          <option value="4">4 series</option>
+          <option value="5" selected>5 series</option>
+        </select>
+      </div>
     </div>
-    <div style="flex:1;">
-      <label class="field">Exercise 2</label>
-      <input id="ex2" type="text" value="Power pushup">
+    <div class="row">
+      <div style="flex:1;">
+        <label class="field">Exercise 1</label>
+        <input id="ex1" type="text" value="Kettlebell snatch">
+      </div>
+      <div style="flex:1;">
+        <label class="field">Exercise 2</label>
+        <input id="ex2" type="text" value="Power pushup">
+      </div>
     </div>
+  </div>
+
+  <!-- Simple and Sinister options -->
+  <div id="ssOptions" class="hidden">
+    <div class="row">
+      <div style="flex:1;">
+        <label class="field">Swing interval (10 sets of 10 swings)</label>
+        <select id="ssInterval">
+          <option value="60">EMOM (every 60 s)</option>
+          <option value="45">Every 45 s</option>
+          <option value="30">Every 30 s</option>
+        </select>
+      </div>
+    </div>
+    <p class="note">Then a 1 min rest, followed by 10 Turkish get-ups EMOM (alternating right / left).</p>
   </div>
 
   <div class="card" id="card">
@@ -105,6 +137,7 @@
 </div>
 
 <script>
+/* ---------- Audio ---------- */
 let audioCtx = null;
 function ensureCtx(){
   if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
@@ -127,17 +160,14 @@ function tone(freq, dur, vol, type, delay){
     o.stop(startAt + dur);
   }catch(e){}
 }
-function warningTick(){
-  tone(1500, 0.06, 0.06, 'sine');
-}
+function warningTick(){ tone(1500, 0.06, 0.06, 'sine'); }
 function exerciseHorn(){
   tone(392, 0.22, 0.28, 'square', 0);
   tone(523, 0.28, 0.28, 'square', 0.22);
 }
-function transitionBeep(){
-  tone(500, 0.3, 0.18, 'sine');
-}
+function transitionBeep(){ tone(500, 0.3, 0.18, 'sine'); }
 
+/* ---------- Colors ---------- */
 const GREEN_BG = '#dcefdd';
 const GREEN_ACCENT = '#1f6b2f';
 const AMBER_BG = '#fbecc7';
@@ -145,6 +175,7 @@ const AMBER_ACCENT = '#8a5a00';
 const NEUTRAL_BG = '#ffffff';
 const NEUTRAL_ACCENT = '#1a1a18';
 
+/* ---------- State ---------- */
 let phases = [];
 let phaseIdx = 0;
 let phaseStart = 0;
@@ -153,11 +184,17 @@ let running = false;
 let rafId = null;
 let firedMarks = new Set();
 let firedWarnings = new Set();
+let wakeLock = null;
 
+/* ---------- Elements ---------- */
+const workoutEl = document.getElementById('workout');
+const qdOptions = document.getElementById('qdOptions');
+const ssOptions = document.getElementById('ssOptions');
 const protocolEl = document.getElementById('protocol');
 const seriesEl = document.getElementById('series');
 const ex1El = document.getElementById('ex1');
 const ex2El = document.getElementById('ex2');
+const ssIntervalEl = document.getElementById('ssInterval');
 const card = document.getElementById('card');
 const phaseLabel = document.getElementById('phaseLabel');
 const exLabel = document.getElementById('exLabel');
@@ -167,7 +204,56 @@ const seriesDots = document.getElementById('seriesDots');
 const startBtn = document.getElementById('startBtn');
 const pauseBtn = document.getElementById('pauseBtn');
 const resetBtn = document.getElementById('resetBtn');
+const controls = [workoutEl, protocolEl, seriesEl, ex1El, ex2El, ssIntervalEl];
 
+/* ---------- Saved settings ---------- */
+const STORE_KEY = 'kettlebell-timer-settings';
+function saveSettings(){
+  try{
+    localStorage.setItem(STORE_KEY, JSON.stringify({
+      workout: workoutEl.value, protocol: protocolEl.value, series: seriesEl.value,
+      ex1: ex1El.value, ex2: ex2El.value, ssInterval: ssIntervalEl.value
+    }));
+  }catch(e){}
+}
+function loadSettings(){
+  try{
+    const raw = localStorage.getItem(STORE_KEY);
+    if(!raw) return;
+    const s = JSON.parse(raw);
+    if(s.workout) workoutEl.value = s.workout;
+    if(s.protocol) protocolEl.value = s.protocol;
+    if(s.series) seriesEl.value = s.series;
+    if(typeof s.ex1 === 'string') ex1El.value = s.ex1;
+    if(typeof s.ex2 === 'string') ex2El.value = s.ex2;
+    if(s.ssInterval) ssIntervalEl.value = s.ssInterval;
+  }catch(e){}
+}
+function showWorkoutOptions(){
+  const isSS = workoutEl.value === 'ss';
+  qdOptions.classList.toggle('hidden', isSS);
+  ssOptions.classList.toggle('hidden', !isSS);
+}
+controls.forEach(el => el.addEventListener('change', ()=>{ showWorkoutOptions(); saveSettings(); }));
+[ex1El, ex2El].forEach(el => el.addEventListener('input', saveSettings));
+
+/* ---------- Screen wake lock ---------- */
+async function getWake(){
+  try{
+    if('wakeLock' in navigator && !wakeLock){
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', ()=>{ wakeLock = null; });
+    }
+  }catch(e){}
+}
+function releaseWake(){
+  try{ if(wakeLock){ wakeLock.release(); wakeLock = null; } }catch(e){}
+}
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState === 'visible' && running) getWake();
+});
+
+/* ---------- Helpers ---------- */
 function fmt(s){
   s = Math.max(0, Math.ceil(s));
   const m = Math.floor(s/60);
@@ -175,45 +261,66 @@ function fmt(s){
   return String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0');
 }
 
-function buildPhases(){
+/* ---------- Workout builders ---------- */
+function buildQuickAndDead(){
   const proto = protocolEl.value;
   const n = parseInt(seriesEl.value,10);
   const marks = proto === '54' ? [0,30,60,90] : [0,60];
-  const repsPerMark = proto === '54' ? 5 : 10;
+  const reps = proto === '54' ? 5 : 10;
+  const cue = 'Go: ' + reps + ' reps';
   const list = [];
   for(let s=1;s<=n;s++){
-    list.push({type:'exercise', label:'Series '+s+' of '+n, exName:ex1El.value||'Exercise 1', dur:120, marks, reps:repsPerMark});
-    list.push({type:'rest', label:'Series '+s+' of '+n, exName:'Rest, transition', dur:60, marks:[], reps:0});
-    list.push({type:'exercise', label:'Series '+s+' of '+n, exName:ex2El.value||'Exercise 2', dur:120, marks, reps:repsPerMark});
+    const label = 'Series '+s+' of '+n;
+    list.push({type:'exercise', label, exName:ex1El.value||'Exercise 1', dur:120, marks, cue, warnMarks:true, lead:0});
+    list.push({type:'rest', label, exName:'Rest, transition', dur:60, marks:[], lead:5});
+    list.push({type:'exercise', label, exName:ex2El.value||'Exercise 2', dur:120, marks, cue, warnMarks:true, lead:0, dotEnd:true});
     if(s < n){
-      list.push({type:'rest', label:'Series '+s+' of '+n, exName:'Rest before next series', dur:60, marks:[], reps:0});
+      list.push({type:'rest', label, exName:'Rest before next series', dur:60, marks:[], lead:5});
     }
   }
-  list.push({type:'done', label:'Complete', exName:'Workout finished', dur:0, marks:[], reps:0});
+  list.push({type:'done', label:'Complete', exName:'Workout finished', dur:0, marks:[]});
   return list;
 }
 
+function buildSimpleAndSinister(){
+  const interval = parseInt(ssIntervalEl.value,10);
+  const list = [];
+  for(let i=1;i<=10;i++){
+    list.push({type:'exercise', label:'Swing set '+i+' of 10', exName:'Kettlebell swing', dur:interval, marks:[0], cue:'Go: 10 swings', cuePersist:true, lead:3, dotEnd:true});
+  }
+  list.push({type:'rest', label:'Transition', exName:'Rest, get-ups next', dur:60, marks:[], lead:5});
+  for(let i=1;i<=10;i++){
+    const side = (i % 2 === 1) ? 'right' : 'left';
+    list.push({type:'exercise', label:'Get-up '+i+' of 10', exName:'Turkish get-up, '+side, dur:60, marks:[0], cue:'Go: 1 get-up ('+side+')', cuePersist:true, lead:3, dotEnd:true});
+  }
+  list.push({type:'done', label:'Complete', exName:'Workout finished', dur:0, marks:[]});
+  return list;
+}
+
+function buildPhases(){
+  return workoutEl.value === 'ss' ? buildSimpleAndSinister() : buildQuickAndDead();
+}
+
+/* ---------- Dots ---------- */
 function renderDots(){
-  const n = parseInt(seriesEl.value,10);
+  const count = phases.filter(p => p.dotEnd).length;
   seriesDots.innerHTML = '';
-  for(let i=0;i<n;i++){
+  for(let i=0;i<count;i++){
     const dot = document.createElement('span');
     dot.className = 'dot';
     seriesDots.appendChild(dot);
   }
 }
-
 function updateDots(){
-  let seriesCompleted = 0;
-  for(let i=0;i<phaseIdx;i++){
-    if(phases[i].type==='exercise' && phases[i].exName===(ex2El.value||'Exercise 2')) seriesCompleted++;
-  }
+  let completed = 0;
+  for(let i=0;i<phaseIdx;i++){ if(phases[i].dotEnd) completed++; }
   const dots = seriesDots.children;
   for(let i=0;i<dots.length;i++){
-    dots[i].style.background = i < seriesCompleted ? '#185fa5' : '#d8d6cd';
+    dots[i].style.background = i < completed ? '#185fa5' : '#d8d6cd';
   }
 }
 
+/* ---------- UI ---------- */
 function applyPhaseColors(p){
   if(!p || p.type === 'done'){
     card.style.background = NEUTRAL_BG;
@@ -234,18 +341,19 @@ function setPhaseUI(){
   if(!p) return;
   if(p.type==='done'){
     phaseLabel.textContent = 'Complete';
-    exLabel.textContent = 'Workout finished — nice work';
+    exLabel.textContent = 'Workout finished, nice work';
     applyPhaseColors(p);
     clockEl.textContent = '00:00';
     repCue.textContent = '';
     return;
   }
-  phaseLabel.textContent = p.label + (p.type==='rest' ? ' — rest' : '');
+  phaseLabel.textContent = p.label + (p.type==='rest' ? ' (rest)' : '');
   exLabel.textContent = p.exName;
   applyPhaseColors(p);
   repCue.textContent = '';
 }
 
+/* ---------- Timer loop ---------- */
 function tick(){
   if(!running) return;
   const p = phases[phaseIdx];
@@ -257,15 +365,30 @@ function tick(){
   const remaining = p.dur - elapsed;
   clockEl.textContent = fmt(remaining);
 
+  // Soft ticks just before the next exercise phase starts
   const nextPhase = phases[phaseIdx+1];
-  if(nextPhase && nextPhase.type === 'exercise' && remaining <= 5.05){
+  if(nextPhase && nextPhase.type === 'exercise' && p.lead && remaining <= p.lead + 0.05){
     const secLeft = Math.ceil(remaining);
-    if(secLeft >= 1 && secLeft <= 5 && !firedWarnings.has(secLeft)){
-      firedWarnings.add(secLeft);
+    const key = 'trans-'+secLeft;
+    if(secLeft >= 1 && secLeft <= p.lead && !firedWarnings.has(key)){
+      firedWarnings.add(key);
       warningTick();
     }
   }
 
+  // Soft tick 3 seconds before each rep mark inside a Quick and Dead block
+  if(p.type === 'exercise' && p.warnMarks){
+    p.marks.forEach(m=>{
+      if(m === 0) return;
+      const key = 'mark-'+m;
+      if(elapsed >= m - 3 && elapsed < m && !firedWarnings.has(key)){
+        firedWarnings.add(key);
+        warningTick();
+      }
+    });
+  }
+
+  // Rep cues
   p.marks.forEach(m=>{
     const key = phaseIdx+'-'+m;
     if(elapsed >= m && !firedMarks.has(key)){
@@ -273,8 +396,10 @@ function tick(){
       if(m !== 0){
         tone(880, 0.15, 0.15, 'sine');
       }
-      repCue.textContent = 'Go: ' + p.reps + ' reps';
-      setTimeout(()=>{ if(phases[phaseIdx]===p) repCue.textContent=''; }, 1500);
+      repCue.textContent = p.cue || '';
+      if(!p.cuePersist){
+        setTimeout(()=>{ if(phases[phaseIdx]===p) repCue.textContent=''; }, 1500);
+      }
     }
   });
 
@@ -308,22 +433,30 @@ function advancePhase(){
 
 function finishAll(){
   running = false;
+  releaseWake();
   phaseLabel.textContent = 'Complete';
-  exLabel.textContent = 'Workout finished — nice work';
+  exLabel.textContent = 'Workout finished, nice work';
   applyPhaseColors({type:'done'});
   clockEl.textContent = '00:00';
   repCue.textContent = '';
   startBtn.disabled = false;
+  startBtn.textContent = 'Start';
   pauseBtn.disabled = true;
+  controls.forEach(el => el.disabled = false);
   updateDots();
 }
 
+/* ---------- Buttons ---------- */
 startBtn.addEventListener('click', ()=>{
   ensureCtx();
   if(phases.length===0 || (phases[phaseIdx] && phases[phaseIdx].type==='done')){
     phases = buildPhases();
     phaseIdx = 0;
+    phaseElapsedAtPause = 0;
+    firedMarks = new Set();
+    firedWarnings = new Set();
     renderDots();
+    updateDots();
     setPhaseUI();
     exerciseHorn();
   }
@@ -331,10 +464,8 @@ startBtn.addEventListener('click', ()=>{
   phaseStart = performance.now();
   startBtn.disabled = true;
   pauseBtn.disabled = false;
-  protocolEl.disabled = true;
-  seriesEl.disabled = true;
-  ex1El.disabled = true;
-  ex2El.disabled = true;
+  controls.forEach(el => el.disabled = true);
+  getWake();
   rafId = requestAnimationFrame(tick);
 });
 
@@ -343,6 +474,7 @@ pauseBtn.addEventListener('click', ()=>{
   running = false;
   phaseElapsedAtPause += (performance.now() - phaseStart)/1000;
   cancelAnimationFrame(rafId);
+  releaseWake();
   startBtn.disabled = false;
   pauseBtn.disabled = true;
   startBtn.textContent = 'Resume';
@@ -351,6 +483,7 @@ pauseBtn.addEventListener('click', ()=>{
 resetBtn.addEventListener('click', ()=>{
   running = false;
   cancelAnimationFrame(rafId);
+  releaseWake();
   phases = [];
   phaseIdx = 0;
   phaseElapsedAtPause = 0;
@@ -359,10 +492,7 @@ resetBtn.addEventListener('click', ()=>{
   startBtn.disabled = false;
   pauseBtn.disabled = true;
   startBtn.textContent = 'Start';
-  protocolEl.disabled = false;
-  seriesEl.disabled = false;
-  ex1El.disabled = false;
-  ex2El.disabled = false;
+  controls.forEach(el => el.disabled = false);
   phaseLabel.textContent = '';
   exLabel.textContent = 'Set your options and press start';
   applyPhaseColors(null);
@@ -370,6 +500,10 @@ resetBtn.addEventListener('click', ()=>{
   repCue.textContent = '';
   seriesDots.innerHTML = '';
 });
+
+/* ---------- Init ---------- */
+loadSettings();
+showWorkoutOptions();
 </script>
 </body>
 </html>
